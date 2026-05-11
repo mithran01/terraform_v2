@@ -32,27 +32,19 @@ else
 fi
 
 ### step 7: copy ssh public key to managed nodes
-echo "[+] copying ssh key to managed node (web-server)"
-# for ip in "$web_servers_ips";do
-#     # copy ssh public key to remote server
-#     ssh-copy-id -i ~/.ssh/id_rsa.pub -o IdentityFile="$pem_key_path" -o StrictHostKeyChecking=no "ec2-user@$ip"
-#     #ssh -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-# done
+echo "[+] copying ssh key to managed node (control-plane)"
+
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
-    ssh -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 done < $control_plane_ips
 
-### step 8.1: copy ssh public key to managed nodes
-echo "[+] copying ssh key to managed node (db-server)"
-# for ip in "$db_servers_ips";do
-#     # copy ssh public key to remote server
-#     ssh-copy-id -i ~/.ssh/id_rsa.pub -o IdentityFile="$pem_key_path" -o StrictHostKeyChecking=no "ec2-user@$ip"
-#     #ssh -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-# done
+### step 8: copy ssh public key to managed nodes
+echo "[+] copying ssh key to managed node (data-plane)"
+
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
-    ssh -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 done < $data_plane_ips
 
 
