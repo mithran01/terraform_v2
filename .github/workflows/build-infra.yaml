@@ -26,7 +26,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-          
+
       - name: Create ansible master private key
         run: |
           echo "${{ secrets.ANSIBLE_MASTER_PRIVATE_KEY }}" > demov1.pem
@@ -41,7 +41,7 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
