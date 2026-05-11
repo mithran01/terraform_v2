@@ -1,0 +1,49 @@
+name: aws terrafrom infra provisioning
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform_env:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Git checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.14.9
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: Create ansible master private key
+        run: |
+          echo "${{ secrets.ANSIBLE_MASTER_PRIVATE_KEY }}" > demov1.pem
+          chmod 400 demov1.pem
+
+      - name: Create demov2.pem
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > demov2.pem
+          chmod 400 demov2.pem
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_ansible_master_private_key: ${{ secrets.ANSIBLE_MASTER_PRIVATE_KEY }}

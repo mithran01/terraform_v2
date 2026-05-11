@@ -3,40 +3,26 @@ resource "aws_instance" "Ansible_Server_Master" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = "t3.micro"
   subnet_id                   = data.aws_subnet.subnet_us_east_1a
-  key_name                    = data.aws_key_pair.existing_key
+  key_name                    = data.aws_key_pair.existing_key.key_name
   associate_public_ip_address = true
   security_groups             = ["sg-0a77e32b49bdfe70e"]
 
   connection {
     type        = "ssh"
     user        = "ec2-user"
-    private_key = file("C:/Users/imith/Desktop/terraform/practise/demov2") # Local private key for SSH access
-    host        = self.public_ip
+    private_key = var.ansible_master_private_key
+    host        = aws_instance.Ansible_Server_Master.public_ip
+  }
+
+
+  provisioner "file" {
+    source      = "demov2.pem"
+    destination = "/home/ec2-user/demov2.pem"
   }
 
   provisioner "file" {
-    source      = "C:/Users/imith/Desktop/terraform/practise/demov2" # Copy the local private key...
-    destination = "/home/ec2-user/demov2.pem"                        # ...to the EC2 master node
-  }
-
-  provisioner "file" {
-    source      = "C:/Users/imith/Desktop/terraform/practise/demov1/ansible.sh" # Copy the local private key...
-    destination = "/home/ec2-user/ansible.sh"                                   # ...to the EC2 master node
-  }
-
-  provisioner "file" {
-    source      = "C:/Users/imith/Desktop/terraform/practise/demov1/ansible-deployment/finexo-html.zip" # Copy the website folder...
-    destination = "/home/ec2-user/finexo-html.zip"                                                      # ...to the EC2 master node
-  }
-
-  provisioner "file" {
-    source      = "C:/Users/imith/Desktop/terraform/practise/demov1/ansible-deployment/deploy-website.yaml" # Copy the ansible yaml file...
-    destination = "/home/ec2-user/deploy-website.yaml"                                                      # ...to the EC2 master node
-  }
-
-  provisioner "file" {
-    source      = "C:/Users/imith/Desktop/terraform/practise/demov1/ansible-deployment/grafana-install.yaml" # Copy the ansible yaml file...
-    destination = "/home/ec2-user/grafana-install.yaml"                                                      # ...to the EC2 master node
+    source      = "ansible.sh"
+    destination = "/home/ec2-user/ansible.sh" # ...to the EC2 master node
   }
 
   # Optional: Fix permissions for the copied key on the remote host
@@ -55,4 +41,72 @@ resource "aws_instance" "Ansible_Server_Master" {
     Name       = "Ansible-Server"
     Managed_by = "Terraform-user"
   }
+}
+
+output "control_plane_ips" {
+  value = aws_instance.control_plane[*].private_ip
+}
+
+output "data_plane_ips" {
+  value = aws_instance.data_plane[*].private_ip
+}
+
+resource "local_file" "control_plane_ips" {
+  content  = join("\n", aws_instance.control_plane[*].private_ip)
+  filename = "control-plane-ips.txt"
+}
+
+resource "local_file" "data_plane_ips" {
+  content  = join("\n", aws_instance.data_plane[*].private_ip)
+  filename = "data-plane-ips.txt"
+}
+
+resource "null_resource" "copy_ips" {
+  provisioner "file" {
+    source      = "control-plane-ips.txt"
+    destination = "/home/ec2-user/control-plane-ips.txt"
+  }
+
+  provisioner "file" {
+    source      = "data-plane-ips.txt"
+    destination = "/home/ec2-user/data-plane-ips.txt"
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = var.ansible_master_private_key
+    host        = aws_instance.Ansible_Server_Master.public_ip
+  }
+
+  depends_on = [
+    aws_instance.Ansible_Server_Master,
+    local_file.control_plane_ips,
+    local_file.data_plane_ips
+  ]
+}
+
+
+resource "null_resource" "run_ansible_script" {
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /home/ec2-user/ansible.sh",
+      "/home/ec2-user/ansible.sh"
+    ]
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = var.ansible_master_private_key
+    host        = aws_instance.Ansible_Server_Master.public_ip
+  }
+
+  depends_on = [
+    aws_instance.Ansible_Server_Master,
+    aws_instance.control_plane,
+    aws_instance.data_plane,
+    null_resource.copy_ips
+  ]
 }
