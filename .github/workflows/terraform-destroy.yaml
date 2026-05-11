@@ -3,9 +3,16 @@ name: terraform destroy infrastructure
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   terraform_destroy:
     runs-on: ubuntu-latest
+
+    env:
+      TF_VAR_ansible_master_private_key: ${{ secrets.ANSIBLE_MASTER_PRIVATE_KEY }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
 
     steps:
 
