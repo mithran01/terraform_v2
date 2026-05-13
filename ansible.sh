@@ -49,7 +49,7 @@ while read -r ip || [ -n "$ip" ];do
 done < $data_plane_ips
 
 ### step 8.1: copy ssh public key to managed nodes
-echo "[+] copying ssh key to managed node (data-plane)"
+echo "[+] copying ssh key to managed node (wireguard-server)"
 
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
@@ -92,7 +92,7 @@ if ansible all -m ping;then
     rm -rf $pem_key_path
     echo "[removed]: $pem_key_path key file"
 else
-    echo -e "\e[31m[FAILED]: ANSIBLE CONFIGURATION FAILED"
+    echo -e "\e[31m[FAILED]: ANSIBLE CONFIGURATION FAILED\e[0m"
     exit 1
 fi
 
