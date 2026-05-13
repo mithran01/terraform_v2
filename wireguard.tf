@@ -1,5 +1,5 @@
-resource "aws_instance" "control_plane" {
-  count                       = 0
+resource "aws_instance" "wireguardVPN" {
+  count                       = 1
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = "t3.micro"
   subnet_id                   = data.aws_subnet.subnet_us_east_1a.id
@@ -10,8 +10,8 @@ resource "aws_instance" "control_plane" {
 
 
   tags = {
-    Name       = "control-plane-${count.index}"
-    Role       = "control-plane"
+    Name       = "wireguard-server-${count.index}"
+    Role       = "vpn-server"
     Managed_by = "Terraform-user"
   }
 }

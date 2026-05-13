@@ -51,6 +51,10 @@ output "data_plane_ips" {
   value = aws_instance.data_plane[*].private_ip
 }
 
+output "wireguard_server_ip" {
+  value = aws_instance.wireguardVPN[*].private_ip
+}
+
 resource "local_file" "control_plane_ips" {
   content  = join("\n", aws_instance.control_plane[*].private_ip)
   filename = "control-plane-ips.txt"
@@ -59,6 +63,11 @@ resource "local_file" "control_plane_ips" {
 resource "local_file" "data_plane_ips" {
   content  = join("\n", aws_instance.data_plane[*].private_ip)
   filename = "data-plane-ips.txt"
+}
+
+resource "local_file" "wireguard_ips" {
+  content  = join("\n", aws_instance.wireguardVPN[*].private_ip)
+  filename = "wireguard-ips.txt"
 }
 
 resource "null_resource" "copy_ips" {
@@ -70,6 +79,11 @@ resource "null_resource" "copy_ips" {
   provisioner "file" {
     source      = "data-plane-ips.txt"
     destination = "/home/ec2-user/data-plane-ips.txt"
+  }
+
+  provisioner "file" {
+    source      = "wireguard-ips.txt"
+    destination = "/home/ec2-user/wireguard-ips.txt"
   }
 
   connection {
@@ -107,6 +121,7 @@ resource "null_resource" "run_ansible_script" {
     aws_instance.Ansible_Server_Master,
     aws_instance.control_plane,
     aws_instance.data_plane,
+    aws_instance.wireguardVPN,
     null_resource.copy_ips
   ]
 }

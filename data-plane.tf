@@ -1,5 +1,5 @@
 resource "aws_instance" "data_plane" {
-  count                       = 2
+  count                       = 0
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = "t3.micro"
   subnet_id                   = data.aws_subnet.subnet_us_east_1b.id
