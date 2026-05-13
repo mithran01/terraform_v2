@@ -1,0 +1,144 @@
+---
+- name: Configure WireGuard VPN Server
+  hosts: wireguard
+  become: true
+
+  vars:
+    wireguard_interface: wg0
+    wireguard_port: 51820
+    wireguard_network: 10.10.0.1/24
+    outbound_interface: eth0
+
+  tasks:
+
+    - name: Update all packages
+      dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+    - name: Install WireGuard packages
+      dnf:
+        name:
+          - wireguard-tools
+          - firewalld
+        state: present
+
+    - name: Enable IP forwarding runtime
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        reload: yes
+
+    - name: Persist IP forwarding
+      copy:
+        dest: /etc/sysctl.d/99-wireguard.conf
+        content: |
+          net.ipv4.ip_forward = 1
+        mode: '0644'
+      notify:
+        - Reload sysctl
+
+    - name: Create WireGuard directory
+      file:
+        path: /etc/wireguard
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Generate private key
+      shell: |
+        wg genkey > /etc/wireguard/privatekey
+      args:
+        creates: /etc/wireguard/privatekey
+      notify:
+        - Restart WireGuard
+
+    - name: Set private key permissions
+      file:
+        path: /etc/wireguard/privatekey
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Generate public key
+      shell: |
+        cat /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+      args:
+        creates: /etc/wireguard/publickey
+      notify:
+        - Restart WireGuard
+
+    - name: Read private key
+      slurp:
+        src: /etc/wireguard/privatekey
+      register: wireguard_privatekey
+
+    - name: Configure WireGuard interface
+      copy:
+        dest: /etc/wireguard/{{ wireguard_interface }}.conf
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          [Interface]
+          Address = {{ wireguard_network }}
+          ListenPort = {{ wireguard_port }}
+          PrivateKey = {{ wireguard_privatekey['content'] | b64decode | trim }}
+
+          PostUp = firewall-cmd --zone=public --add-port={{ wireguard_port }}/udp
+          PostUp = firewall-cmd --zone=public --add-masquerade
+          PostUp = firewall-cmd --runtime-to-permanent
+
+          PostDown = firewall-cmd --zone=public --remove-port={{ wireguard_port }}/udp
+          PostDown = firewall-cmd --zone=public --remove-masquerade
+          PostDown = firewall-cmd --runtime-to-permanent
+      notify:
+        - Restart WireGuard
+
+    - name: Enable and start firewalld
+      systemd:
+        name: firewalld
+        enabled: true
+        state: started
+
+    - name: Open WireGuard UDP port permanently
+      firewalld:
+        port: "{{ wireguard_port }}/udp"
+        permanent: true
+        state: enabled
+        immediate: true
+      notify:
+        - Reload firewalld
+
+    - name: Enable masquerading permanently
+      firewalld:
+        masquerade: true
+        permanent: true
+        state: enabled
+        immediate: true
+      notify:
+        - Reload firewalld
+
+    - name: Enable WireGuard service
+      systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        enabled: true
+        state: started
+
+  handlers:
+
+    - name: Restart WireGuard
+      systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        state: restarted
+
+    - name: Reload firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
+
+    - name: Reload sysctl
+      command: sysctl --system

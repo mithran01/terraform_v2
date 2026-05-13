@@ -1,0 +1,87 @@
+---
+- name: Create WireGuard Client
+  hosts: wireguard
+  become: true
+
+  vars:
+    client_name: "{{ client_name }}"
+    client_ip: "{{ client_ip }}"
+    server_public_ip: "YOUR_PUBLIC_IP"
+    wireguard_interface: wg0
+
+  tasks:
+
+    - name: Create client directory
+      file:
+        path: "/opt/wireguard/clients/{{ client_name }}"
+        state: directory
+        mode: '0700'
+
+    - name: Generate client private key
+      shell: |
+        wg genkey > /opt/wireguard/clients/{{ client_name }}/private.key
+      args:
+        creates: "/opt/wireguard/clients/{{ client_name }}/private.key"
+
+    - name: Generate client public key
+      shell: |
+        cat /opt/wireguard/clients/{{ client_name }}/private.key | wg pubkey > /opt/wireguard/clients/{{ client_name }}/public.key
+      args:
+        creates: "/opt/wireguard/clients/{{ client_name }}/public.key"
+
+    - name: Read client private key
+      slurp:
+        src: "/opt/wireguard/clients/{{ client_name }}/private.key"
+      register: client_private_key
+
+    - name: Read client public key
+      slurp:
+        src: "/opt/wireguard/clients/{{ client_name }}/public.key"
+      register: client_public_key
+
+    - name: Read server public key
+      slurp:
+        src: "/etc/wireguard/publickey"
+      register: server_public_key
+
+    - name: Add client peer to server config
+      blockinfile:
+        path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+        marker: "# {mark} ANSIBLE MANAGED CLIENT {{ client_name }}"
+        block: |
+
+          [Peer]
+          PublicKey = {{ client_public_key['content'] | b64decode | trim }}
+          AllowedIPs = {{ client_ip }}
+      notify:
+        - Restart WireGuard
+
+    - name: Create client config
+      copy:
+        dest: "/opt/wireguard/clients/{{ client_name }}/{{ client_name }}.conf"
+        mode: '0600'
+        content: |
+          [Interface]
+          PrivateKey = {{ client_private_key['content'] | b64decode | trim }}
+          Address = {{ client_ip }}
+          DNS = 1.1.1.1
+
+          [Peer]
+          PublicKey = {{ server_public_key['content'] | b64decode | trim }}
+          Endpoint = {{ server_public_ip }}:51820
+          AllowedIPs = 0.0.0.0/0
+          PersistentKeepalive = 25
+
+    - name: Create ZIP package
+      archive:
+        path:
+          - "/opt/wireguard/clients/{{ client_name }}/{{ client_name }}.conf"
+        dest: "/opt/wireguard/clients/{{ client_name }}/{{ client_name }}.zip"
+        format: zip
+
+  handlers:
+
+    - name: Restart WireGuard
+      systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        state: restarted
