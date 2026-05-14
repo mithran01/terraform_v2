@@ -1,0 +1,19 @@
+---
+- name: Copy join command from control plane
+  fetch:
+    src: /tmp/kubeadm_join_cmd.sh
+    dest: /tmp/kubeadm_join_cmd.sh
+    flat: true
+  delegate_to: "{{ groups['controlplane'][0] }}"
+
+- name: Copy join script to worker
+  copy:
+    src: /tmp/kubeadm_join_cmd.sh
+    dest: /tmp/kubeadm_join_cmd.sh
+    mode: '0755'
+
+- name: Join Kubernetes cluster
+  shell: |
+    /tmp/kubeadm_join_cmd.sh
+  args:
+    creates: /etc/kubernetes/kubelet.conf 

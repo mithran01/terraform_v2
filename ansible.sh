@@ -6,6 +6,9 @@ control_plane_ips="/home/ec2-user/control-plane-ips.txt"
 data_plane_ips="/home/ec2-user/data-plane-ips.txt"
 wireguard_ips="/home/ec2-user/wireguard-ips.txt"
 
+rocky_user="rocky"
+amazon_user="ec2-user"
+
 ### step 1: update system
 sudo dnf update -y
 
@@ -37,7 +40,7 @@ echo "[+] copying ssh key to managed node (control-plane)"
 
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
-    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ${rocky_user}@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 done < $control_plane_ips
 
 ### step 8: copy ssh public key to managed nodes
@@ -45,7 +48,7 @@ echo "[+] copying ssh key to managed node (data-plane)"
 
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
-    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ${rocky_user}@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 done < $data_plane_ips
 
 ### step 8.1: copy ssh public key to managed nodes
@@ -53,7 +56,7 @@ echo "[+] copying ssh key to managed node (wireguard-server)"
 
 while read -r ip || [ -n "$ip" ];do
   [ -z "$ip" ] && continue
-    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ec2-user@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    ssh -n -o StrictHostKeyChecking=no -i "$pem_key_path" ${amazon_user}@"$ip" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo $(cat ~/.ssh/id_rsa.pub) >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 done < $wireguard_ips
 
 ### step 9: configure ansible inventory 
@@ -62,17 +65,15 @@ echo "[+] Writing inventory dynamically"
 
 sudo tee /etc/ansible/hosts > /dev/null <<EOF
 [controlplane]
-$(cat "$control_plane_ips")
+$(awk '{print $1 " ansible_user=rocky"}' "$control_plane_ips")
 
 [dataplane]
-$(cat "$data_plane_ips")
+$(awk '{print $1 " ansible_user=rocky"}' "$data_plane_ips")
 
 [wireguard]
-$(cat "$wireguard_ips")
-
+$(awk '{print $1 " ansible_user=ec2-user"}' "$wireguard_ips")
 
 [all:vars]
-ansible_user=ec2-user
 ansible_python_interpreter=/usr/bin/python3
 EOF
 
@@ -81,9 +82,15 @@ echo "[+] Writing basic ansible configuration ..."
 sudo bash -c 'cat > /etc/ansible/ansible.cfg' << EOF
 [defaults]
 inventory = /etc/ansible/hosts
+forks = 20
+timeout = 30
 host_key_checking = False
-remote_user = ec2-user
 deprecation_warning = False
+interpreter_python = auto_silent
+
+[ssh_connection] 
+pipelining = True 
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s
 EOF
 
 ### step 11: validate connection

@@ -1,0 +1,24 @@
+---
+- name: Configure all Kubernetes nodes
+  hosts: controlplane:dataplane
+  become: true
+  roles:
+    - common
+
+- name: Configure Kubernetes control plane
+  hosts: controlplane
+  become: true
+  roles:
+    - controlplane
+
+- name: Join worker nodes
+  hosts: dataplane
+  become: true
+  roles:
+    - worker
+
+- name: Install CNI
+  hosts: controlplane
+  become: true
+  roles:
+    - cni
