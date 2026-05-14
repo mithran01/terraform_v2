@@ -5,7 +5,7 @@ resource "aws_instance" "Ansible_Server_Master" {
   subnet_id                   = data.aws_subnet.subnet_us_east_1a.id
   key_name                    = data.aws_key_pair.existing_key.key_name
   associate_public_ip_address = true
-  security_groups             = ["sg-0a77e32b49bdfe70e"]
+  vpc_security_group_ids      = ["sg-0a77e32b49bdfe70e"]
 
   connection {
     type        = "ssh"
