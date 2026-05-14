@@ -4,7 +4,7 @@ resource "aws_instance" "data_plane" {
   instance_type               = "t3.small"
   subnet_id                   = data.aws_subnet.subnet_us_east_1b.id
   key_name                    = aws_key_pair.demov2.key_name
-  associate_public_ip_address = false
+  associate_public_ip_address = true
   vpc_security_group_ids      = ["sg-0a77e32b49bdfe70e"]
 
   tags = {
