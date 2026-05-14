@@ -34,7 +34,7 @@ data "aws_ami" "rocky_linux" {
 
   filter {
     name   = "name"
-    values = ["Rocky-9-EC2-Base-9.*-x86_64-*"]
+    values = ["Rocky-9-EC2-Base-9.*-x86_64"]
   }
 
   filter {
@@ -43,13 +43,18 @@ data "aws_ami" "rocky_linux" {
   }
 
   filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
     name   = "root-device-type"
     values = ["ebs"]
   }
 
   filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "state"
+    values = ["available"]
   }
 }
 # default keypair check
