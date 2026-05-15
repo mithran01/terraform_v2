@@ -28,6 +28,13 @@
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       failed_when: false
+    
+    - name: Install kubernetes python library
+      pip:
+        name:
+          - kubernetes
+          - PyYAML
+        executable: pip3
 
     # -------------------------------------------------------------------------
     # Check existing secret
