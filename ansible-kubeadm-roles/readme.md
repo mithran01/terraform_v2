@@ -1,0 +1,1 @@
+ANSIBLE_ROLES_PATH=./roles ansible-playbook -i /etc/ansible/hosts playbooks/kubernetes.yaml
