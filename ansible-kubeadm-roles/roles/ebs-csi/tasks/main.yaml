@@ -13,7 +13,7 @@
 
 - name: Add EBS CSI Helm repo
   shell: |
-    helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+    /usr/local/bin/helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
@@ -25,7 +25,7 @@
 
 - name: Install EBS CSI Driver
   shell: |
-    helm upgrade --install aws-ebs-csi-driver \
+    /usr/local/bin/helm upgrade --install aws-ebs-csi-driver \
       aws-ebs-csi-driver/aws-ebs-csi-driver \
       --namespace kube-system
   environment:
