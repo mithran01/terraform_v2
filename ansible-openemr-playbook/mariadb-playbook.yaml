@@ -1,0 +1,290 @@
+---
+- name: Deploy MariaDB on Kubernetes
+  hosts: controlplane
+  become: true
+
+  vars:
+    namespace: openemr
+    mariadb_image: mariadb:11.4
+
+    mariadb_database: openemr
+    mariadb_user: openemr
+
+    storage_class: gp3
+    db_storage_size: 10Gi
+
+    mariadb_resources:
+      limits:
+        memory: 2Gi
+        cpu: 1
+
+      requests:
+        memory: 1Gi
+        cpu: 500m
+
+  tasks:
+    - name: Create namespace
+      command: kubectl create namespace {{ namespace }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      failed_when: false
+
+    # -------------------------------------------------------------------------
+    # Check existing secret
+    # -------------------------------------------------------------------------
+
+    - name: Check existing MariaDB secret
+      kubernetes.core.k8s_info:
+        kind: Secret
+        name: mariadb-secret
+        namespace: "{{ namespace }}"
+      register: existing_secret
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    # -------------------------------------------------------------------------
+    # Generate or reuse passwords
+    # -------------------------------------------------------------------------
+
+    - name: Resolve MariaDB passwords
+      set_fact:
+
+        mariadb_root_password: >-
+          {{
+            existing_secret.resources[0].data['database-root-password'] | b64decode
+            if existing_secret.resources | length > 0
+            else lookup(
+              'ansible.builtin.password',
+              '/dev/null',
+              length=32,
+              chars=['ascii_letters','digits']
+            )
+          }}
+
+        mariadb_password: >-
+          {{
+            existing_secret.resources[0].data['database-password'] | b64decode
+            if existing_secret.resources | length > 0
+            else lookup(
+              'ansible.builtin.password',
+              '/dev/null',
+              length=32,
+              chars=['ascii_letters','digits']
+            )
+          }}
+
+    # -------------------------------------------------------------------------
+    # MariaDB Secret
+    # -------------------------------------------------------------------------
+
+    - name: Set MariaDB Secret manifest
+      set_fact:
+        manifest_mariadb_secret:
+          apiVersion: v1
+          kind: Secret
+
+          metadata:
+            name: mariadb-secret
+            namespace: "{{ namespace }}"
+
+          type: Opaque
+
+          stringData:
+            database-name: "{{ mariadb_database }}"
+            database-user: "{{ mariadb_user }}"
+            database-password: "{{ mariadb_password }}"
+            database-root-password: "{{ mariadb_root_password }}"
+
+    - name: Apply MariaDB Secret
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ manifest_mariadb_secret }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    # -------------------------------------------------------------------------
+    # MariaDB PVC
+    # -------------------------------------------------------------------------
+
+    - name: Set MariaDB PVC manifest
+      set_fact:
+        manifest_mariadb_pvc:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+
+          metadata:
+            name: mariadb-data
+            namespace: "{{ namespace }}"
+
+          spec:
+            accessModes:
+              - ReadWriteOnce
+
+            storageClassName: "{{ storage_class }}"
+
+            resources:
+              requests:
+                storage: "{{ db_storage_size }}"
+
+    - name: Apply MariaDB PVC
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ manifest_mariadb_pvc }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    # -------------------------------------------------------------------------
+    # MariaDB Deployment
+    # -------------------------------------------------------------------------
+
+    - name: Set MariaDB Deployment manifest
+      set_fact:
+        manifest_mariadb_deployment:
+          apiVersion: apps/v1
+          kind: Deployment
+
+          metadata:
+            name: mariadb
+            namespace: "{{ namespace }}"
+
+          spec:
+            replicas: 1
+
+            strategy:
+              type: Recreate
+
+            selector:
+              matchLabels:
+                app: mariadb
+
+            template:
+              metadata:
+                labels:
+                  app: mariadb
+
+              spec:
+                containers:
+                  - name: mariadb
+
+                    image: "{{ mariadb_image }}"
+
+                    ports:
+                      - containerPort: 3306
+                        name: mysql
+
+                    env:
+                      - name: MYSQL_ROOT_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-root-password
+
+                      - name: MYSQL_DATABASE
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-name
+
+                      - name: MYSQL_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-user
+
+                      - name: MYSQL_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-password
+
+                    volumeMounts:
+                      - name: mariadb-data
+                        mountPath: /var/lib/mysql
+
+                    livenessProbe:
+                      tcpSocket:
+                        port: 3306
+
+                      initialDelaySeconds: 30
+                      periodSeconds: 10
+
+                    readinessProbe:
+                      tcpSocket:
+                        port: 3306
+
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+
+                    resources: "{{ mariadb_resources }}"
+
+                volumes:
+                  - name: mariadb-data
+                    persistentVolumeClaim:
+                      claimName: mariadb-data
+
+    - name: Apply MariaDB Deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ manifest_mariadb_deployment }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    # -------------------------------------------------------------------------
+    # MariaDB Service
+    # -------------------------------------------------------------------------
+
+    - name: Set MariaDB Service manifest
+      set_fact:
+        manifest_mariadb_service:
+          apiVersion: v1
+          kind: Service
+
+          metadata:
+            name: mariadb
+            namespace: "{{ namespace }}"
+
+          spec:
+            selector:
+              app: mariadb
+
+            ports:
+              - port: 3306
+                targetPort: 3306
+                name: mysql
+
+            type: ClusterIP
+
+    - name: Apply MariaDB Service
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ manifest_mariadb_service }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    # -------------------------------------------------------------------------
+    # Wait for MariaDB
+    # -------------------------------------------------------------------------
+
+    - name: Wait for MariaDB pod
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=mariadb
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Get MariaDB pods
+      command: kubectl get pods -n {{ namespace }}
+      register: mariadb_pods
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Show MariaDB pod status
+      debug:
+        var: mariadb_pods.stdout

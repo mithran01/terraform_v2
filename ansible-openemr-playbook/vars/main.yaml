@@ -1,0 +1,81 @@
+---
+# =============================================================================
+# OpenEMR on kubeadm — Ansible Variables
+#
+# Override any variable at runtime:
+#   ansible-playbook deploy-openemr.yml -e "storage_class=lvms-vg1"
+#   ansible-playbook deploy-openemr.yml -e "@vars/prod.yml"
+# =============================================================================
+
+# ── Action ────────────────────────────────────────────────────────────────────
+action: deploy   # deploy | status | cleanup
+
+# ── Images ────────────────────────────────────────────────────────────────────
+openemr_image: "docker.io/openemr:latest"
+mariadb_image: "quay.io/fedora/mariadb-118:latest"
+redis_image:   "docker.io/redis:8-alpine"
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+# Leave storage_class empty to auto-detect the cluster's default StorageClass.
+# Set explicitly to target a specific class:
+#   storage_class: lvms-vg1                          # SNO with LVM Storage
+#   storage_class: ocs-storagecluster-ceph-rbd       # ODF block
+#   storage_class: ocs-storagecluster-cephfs         # ODF file (RWX)
+#   storage_class: gp3-csi                           # Developer Sandbox (AWS EBS)
+storage_class: ""
+
+db_storage_size:        "5Gi"
+documents_storage_size: "10Gi"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+db_name: openemr
+db_user: openemr
+
+# Passwords — leave commented to auto-generate on first run.
+# Uncomment to pin specific values (useful for reprovisioning).
+# db_password:      ""
+# db_root_password: ""
+
+# ── OpenEMR admin ─────────────────────────────────────────────────────────────
+oe_admin_user: admin
+
+# Leave commented to auto-generate.
+# oe_admin_password: ""
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis_max_memory:        "256mb"
+redis_max_memory_policy: "allkeys-lru"
+
+# ── Resource limits ───────────────────────────────────────────────────────────
+mariadb_resources:
+  limits:
+    memory: 2Gi
+    cpu: 1
+  requests:
+    memory: 1Gi
+    cpu: 500m
+
+redis_resources:
+  limits:
+    memory: 256Mi
+    cpu: 250m
+  requests:
+    memory: 64Mi
+    cpu: 50m
+
+openemr_resources:
+  limits:
+    memory: 768Mi
+    cpu: 500m
+  requests:
+    memory: 384Mi
+    cpu: 200m
+
+# ── Wait timeouts (seconds) ───────────────────────────────────────────────────
+mariadb_wait_timeout: 300
+redis_wait_timeout:   300
+openemr_wait_timeout: 300
+
+# ── Output paths ──────────────────────────────────────────────────────────────
+manifests_dir:    "./openemr-manifests"
+credentials_file: "./openemr-credentials.txt"
