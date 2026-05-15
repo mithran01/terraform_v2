@@ -19,7 +19,7 @@
 
 - name: Update Helm repos
   shell: |
-    helm repo update
+    /usr/local/bin/helm repo update
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
