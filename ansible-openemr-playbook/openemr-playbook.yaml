@@ -143,7 +143,7 @@
 
                           echo "Copying initial OpenEMR documents..."
 
-                          cp -rp /var/www/html/openemr/sites/default/documents/* /mnt/documents/ || true
+                          cp -a /var/www/localhost/htdocs/openemr/sites/default/documents/. /mnt/documents/ || true
 
                           touch /mnt/documents/.initialized
 
@@ -178,7 +178,7 @@
                       # redis
                       - name: REDIS_HOST
                         value: redis
-                        
+
                       # -------------------------------------------------------
                       # MariaDB
                       # -------------------------------------------------------
@@ -229,23 +229,7 @@
                     volumeMounts:
 
                       - name: openemr-documents
-                        mountPath: /var/www/html/openemr/sites/default/documents
-
-                    readinessProbe:
-                      httpGet:
-                        path: /
-                        port: 80
-
-                      initialDelaySeconds: 30
-                      periodSeconds: 10
-
-                    livenessProbe:
-                      httpGet:
-                        path: /
-                        port: 80
-
-                      initialDelaySeconds: 60
-                      periodSeconds: 20
+                        mountPath: /var/www/localhost/htdocs/openemr/sites/default/documents
 
                     resources:
                       requests:
