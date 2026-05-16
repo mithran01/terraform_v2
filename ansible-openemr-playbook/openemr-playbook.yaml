@@ -13,7 +13,7 @@
 
     efs_storage_class: efs-sc
 
-    documents_storage_size: 20Gi
+    documents_storage_size: 5Gi
 
     oe_admin_user: admin
 

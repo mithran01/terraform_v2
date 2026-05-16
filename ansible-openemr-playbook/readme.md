@@ -6,6 +6,8 @@ kubectl get pv
 
 kubectl delete pv <old-pv>
 
+kubectl delete storageclass efs-sc
+
 DROP DATABASE openemr;
 
 CREATE DATABASE openemr;
