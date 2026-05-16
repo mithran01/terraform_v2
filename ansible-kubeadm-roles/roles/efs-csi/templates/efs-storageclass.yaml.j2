@@ -8,10 +8,14 @@ provisioner: efs.csi.aws.com
 
 parameters:
   provisioningMode: efs-ap
+
   fileSystemId: "{{ efs_filesystem_id }}"
-  directoryPerms: "700"
-  gidRangeStart: "1000"
-  gidRangeEnd: "2000"
+
+  directoryPerms: "0775"
+
+  uid: "1000"
+  gid: "102"
+
   basePath: "/k8s"
 
 mountOptions:
