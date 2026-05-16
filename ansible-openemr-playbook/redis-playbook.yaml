@@ -1,6 +1,6 @@
 ---
 - name: Deploy Redis on Kubernetes
-  hosts: k8s_master
+  hosts: controlplane
   become: true
 
   vars:
