@@ -45,6 +45,17 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
 }
 
 # -----------------------------------------------------------------------------
+# Attach EFS CSI Policy
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role_policy_attachment" "efs_csi" {
+
+  role = aws_iam_role.kubeadm_node_role.name
+
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
+}
+
+# -----------------------------------------------------------------------------
 # Optional Recommended Policies
 # -----------------------------------------------------------------------------
 
