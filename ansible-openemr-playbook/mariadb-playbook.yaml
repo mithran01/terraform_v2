@@ -238,6 +238,18 @@
                     volumeMounts:
                       - name: mariadb-data
                         mountPath: /var/lib/mysql
+                    
+                    livenessProbe:
+                      tcpSocket:
+                        port: 3306
+                      initialDelaySeconds: 30
+                      periodSeconds: 10
+                    
+                    readinessProbe:
+                      tcpSocket:
+                        port: 3306
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
 
                     resources:
                       requests:
