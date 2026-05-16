@@ -17,7 +17,7 @@
     # Redis
     # -------------------------------------------------------------------------
 
-    redis_image: redis:7-alpine
+    redis_image: redis:8-alpine
 
     redis_max_memory: 256mb
 
@@ -110,7 +110,6 @@
 
                     securityContext:
                       allowPrivilegeEscalation: false
-                      runAsNonRoot: true
 
                       capabilities:
                         drop:
