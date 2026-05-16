@@ -1,0 +1,372 @@
+---
+- name: Deploy OpenEMR with EFS CSI
+  hosts: controlplane
+  become: true
+
+  vars:
+
+    namespace: openemr
+
+    kubeconfig_path: /etc/kubernetes/admin.conf
+
+    openemr_image: openemr/openemr:7.0.3
+
+    efs_storage_class: efs-sc
+
+    documents_storage_size: 20Gi
+
+    oe_admin_user: admin
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # Generate OpenEMR Admin Password
+    # -------------------------------------------------------------------------
+
+    - name: Generate OpenEMR admin password
+      set_fact:
+        oe_admin_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+
+    # -------------------------------------------------------------------------
+    # OpenEMR Secret
+    # -------------------------------------------------------------------------
+
+    - name: Create OpenEMR Secret manifest
+      copy:
+        dest: /tmp/openemr-secret.yaml
+        content: |
+          apiVersion: v1
+          kind: Secret
+
+          metadata:
+            name: openemr-secret
+            namespace: {{ namespace }}
+
+          type: Opaque
+
+          stringData:
+
+            admin-username: "{{ oe_admin_user }}"
+
+            admin-password: "{{ oe_admin_password }}"
+
+    - name: Apply OpenEMR Secret
+      command: kubectl apply -f /tmp/openemr-secret.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # PVC for Documents
+    # -------------------------------------------------------------------------
+
+    - name: Create OpenEMR Documents PVC
+      copy:
+        dest: /tmp/openemr-documents-pvc.yaml
+        content: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+
+          metadata:
+            name: openemr-documents
+            namespace: {{ namespace }}
+
+            labels:
+              app: openemr
+
+          spec:
+
+            accessModes:
+              - ReadWriteMany
+
+            storageClassName: {{ efs_storage_class }}
+
+            resources:
+              requests:
+                storage: {{ documents_storage_size }}
+
+    - name: Apply OpenEMR Documents PVC
+      command: kubectl apply -f /tmp/openemr-documents-pvc.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # OpenEMR Deployment
+    # -------------------------------------------------------------------------
+
+    - name: Create OpenEMR Deployment manifest
+      copy:
+        dest: /tmp/openemr-deployment.yaml
+        content: |
+          apiVersion: apps/v1
+          kind: Deployment
+
+          metadata:
+            name: openemr
+            namespace: {{ namespace }}
+
+            labels:
+              app: openemr
+
+          spec:
+
+            replicas: 1
+
+            selector:
+              matchLabels:
+                app: openemr
+
+            template:
+
+              metadata:
+                labels:
+                  app: openemr
+
+              spec:
+
+                # -------------------------------------------------------------
+                # Init Container
+                # -------------------------------------------------------------
+
+                initContainers:
+
+                  - name: init-openemr-documents
+
+                    image: {{ openemr_image }}
+
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        mkdir -p /mnt/documents
+
+                        if [ ! -f /mnt/documents/.initialized ]; then
+
+                          echo "Copying initial OpenEMR documents..."
+
+                          cp -rp /var/www/html/openemr/sites/default/documents/* /mnt/documents/ || true
+
+                          touch /mnt/documents/.initialized
+
+                        else
+
+                          echo "Documents already initialized"
+
+                        fi
+
+                    volumeMounts:
+
+                      - name: openemr-documents
+                        mountPath: /mnt/documents
+
+                # -------------------------------------------------------------
+                # Main Container
+                # -------------------------------------------------------------
+
+                containers:
+
+                  - name: openemr
+
+                    image: {{ openemr_image }}
+
+                    imagePullPolicy: IfNotPresent
+
+                    ports:
+                      - containerPort: 80
+                        name: http
+
+                    env:
+                      # redis
+                      - name: REDIS_HOST
+                        value: redis
+                        
+                      # -------------------------------------------------------
+                      # MariaDB
+                      # -------------------------------------------------------
+
+                      - name: MYSQL_HOST
+                        value: mariadb
+                      
+                      - name: DB_PORT
+                        value: "3306"
+
+                      - name: MYSQL_DATABASE
+                        value: openemr
+
+                      - name: MYSQL_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-user
+
+                      - name: MYSQL_PASS
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-password
+
+                      - name: MYSQL_ROOT_PASS
+                        valueFrom:
+                          secretKeyRef:
+                            name: mariadb-secret
+                            key: database-root-password
+
+                      # -------------------------------------------------------
+                      # OpenEMR Admin
+                      # -------------------------------------------------------
+
+                      - name: OE_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: openemr-secret
+                            key: admin-username
+
+                      - name: OE_PASS
+                        valueFrom:
+                          secretKeyRef:
+                            name: openemr-secret
+                            key: admin-password
+
+                    volumeMounts:
+
+                      - name: openemr-documents
+                        mountPath: /var/www/html/openemr/sites/default/documents
+
+                    readinessProbe:
+                      httpGet:
+                        path: /
+                        port: 80
+
+                      initialDelaySeconds: 30
+                      periodSeconds: 10
+
+                    livenessProbe:
+                      httpGet:
+                        path: /
+                        port: 80
+
+                      initialDelaySeconds: 60
+                      periodSeconds: 20
+
+                    resources:
+                      requests:
+                        cpu: "500m"
+                        memory: "1Gi"
+
+                      limits:
+                        cpu: "1"
+                        memory: "2Gi"
+
+                volumes:
+
+                  - name: openemr-documents
+
+                    persistentVolumeClaim:
+                      claimName: openemr-documents
+
+    - name: Apply OpenEMR Deployment
+      command: kubectl apply -f /tmp/openemr-deployment.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # OpenEMR Service
+    # -------------------------------------------------------------------------
+
+    - name: Create OpenEMR Service
+      copy:
+        dest: /tmp/openemr-service.yaml
+        content: |
+          apiVersion: v1
+          kind: Service
+
+          metadata:
+            name: openemr
+            namespace: {{ namespace }}
+
+          spec:
+
+            selector:
+              app: openemr
+
+            ports:
+              - name: http
+                port: 80
+                targetPort: 80
+
+            type: ClusterIP
+
+    - name: Apply OpenEMR Service
+      command: kubectl apply -f /tmp/openemr-service.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # OpenEMR Ingress
+    # -------------------------------------------------------------------------
+
+    - name: Create OpenEMR Ingress
+      copy:
+        dest: /tmp/openemr-ingress.yaml
+        content: |
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+
+          metadata:
+            name: openemr
+            namespace: {{ namespace }}
+
+            annotations:
+              nginx.ingress.kubernetes.io/proxy-body-size: "256m"
+
+          spec:
+
+            ingressClassName: nginx
+
+            rules:
+
+              - host: openemr.example.com
+
+                http:
+
+                  paths:
+
+                    - path: /
+                      pathType: Prefix
+
+                      backend:
+                        service:
+                          name: openemr
+
+                          port:
+                            number: 80
+
+    - name: Apply OpenEMR Ingress
+      command: kubectl apply -f /tmp/openemr-ingress.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # Wait for Deployment
+    # -------------------------------------------------------------------------
+
+    - name: Wait for OpenEMR rollout
+      command: >
+        kubectl rollout status deployment/openemr
+        -n {{ namespace }}
+        --timeout=600s
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # -------------------------------------------------------------------------
+    # Show Credentials
+    # -------------------------------------------------------------------------
+
+    - name: Show OpenEMR credentials
+      debug:
+        msg:
+          - "======================================="
+          - "OpenEMR Credentials"
+          - "======================================="
+          - "Username: {{ oe_admin_user }}"
+          - "Password: {{ oe_admin_password }}"
+          - "======================================="
