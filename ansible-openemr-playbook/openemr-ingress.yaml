@@ -7,7 +7,7 @@
 
     kubeconfig_path: /etc/kubernetes/admin.conf
 
-    namespace: openemr
+    openemr_namespace: openemr
 
     domain_name: us.mitz.shop
 
@@ -20,7 +20,30 @@
   tasks:
 
     # =========================================================================
-    # Install ingress-nginx
+    # Install Required Packages
+    # =========================================================================
+
+    - name: Install curl
+      package:
+        name: curl
+        state: present
+
+    # =========================================================================
+    # Install Helm
+    # =========================================================================
+
+    - name: Check Helm installation
+      stat:
+        path: /usr/local/bin/helm
+      register: helm_binary
+
+    - name: Install Helm
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      when: not helm_binary.stat.exists
+
+    # =========================================================================
+    # Add Helm Repositories
     # =========================================================================
 
     - name: Add ingress-nginx Helm repository
@@ -28,14 +51,25 @@
         helm repo add ingress-nginx
         https://kubernetes.github.io/ingress-nginx
 
+    - name: Add Jetstack Helm repository
+      command: >
+        helm repo add jetstack
+        https://charts.jetstack.io
+
     - name: Update Helm repositories
       command: helm repo update
+
+    # =========================================================================
+    # Install ingress-nginx
+    # =========================================================================
 
     - name: Create ingress-nginx values file
       copy:
         dest: /tmp/ingress-nginx-values.yaml
         content: |
           controller:
+
+            replicaCount: 2
 
             ingressClassResource:
               name: nginx
@@ -56,9 +90,17 @@
 
                 service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
 
+                service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "instance"
+
+                service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+
             config:
 
               proxy-body-size: "256m"
+
+              proxy-read-timeout: "600"
+
+              proxy-send-timeout: "600"
 
               use-forwarded-headers: "true"
 
@@ -110,15 +152,8 @@
           - "======================================="
 
     # =========================================================================
-    # Install cert-manager
+    # Install cert-manager CRDs
     # =========================================================================
-
-    - name: Add Jetstack Helm repository
-      command: >
-        helm repo add jetstack https://charts.jetstack.io
-
-    - name: Update Helm repositories again
-      command: helm repo update
 
     - name: Install cert-manager CRDs
       command: >
@@ -126,6 +161,10 @@
         https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.crds.yaml
       environment:
         KUBECONFIG: "{{ kubeconfig_path }}"
+
+    # =========================================================================
+    # Install cert-manager
+    # =========================================================================
 
     - name: Install cert-manager
       command: >
@@ -165,7 +204,7 @@
         KUBECONFIG: "{{ kubeconfig_path }}"
 
     # =========================================================================
-    # Create Let's Encrypt ClusterIssuer
+    # Create ClusterIssuer
     # =========================================================================
 
     - name: Create ClusterIssuer manifest
@@ -229,7 +268,7 @@
 
           metadata:
             name: openemr
-            namespace: {{ namespace }}
+            namespace: {{ openemr_namespace }}
 
             annotations:
 
@@ -242,6 +281,10 @@
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 
               nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+
+              nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+
+              nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
 
           spec:
 
@@ -283,7 +326,7 @@
     - name: Wait for TLS secret creation
       command: >
         kubectl get secret openemr-tls
-        -n {{ namespace }}
+        -n {{ openemr_namespace }}
       register: tls_secret
       retries: 30
       delay: 20
