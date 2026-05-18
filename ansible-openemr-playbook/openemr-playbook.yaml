@@ -285,65 +285,6 @@
         KUBECONFIG: "{{ kubeconfig_path }}"
 
     # -------------------------------------------------------------------------
-    # OpenEMR Ingress
-    # -------------------------------------------------------------------------
-
-    - name: Create OpenEMR Ingress
-      copy:
-        dest: /tmp/openemr-ingress.yaml
-        content: |
-          apiVersion: networking.k8s.io/v1
-          kind: Ingress
-
-          metadata:
-            name: openemr
-            namespace: {{ namespace }}
-
-            annotations:
-
-              nginx.ingress.kubernetes.io/proxy-body-size: "256m"
-
-              # Force HTTPS
-              nginx.ingress.kubernetes.io/ssl-redirect: "true"
-              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-
-              # Backend protocol
-              nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-
-          spec:
-
-            ingressClassName: nginx
-
-            tls:
-              - hosts:
-                  - us.mitz.shop
-
-                secretName: us-mitz-shop-tls
-
-            rules:
-
-              - host: us.mitz.shop
-
-                http:
-
-                  paths:
-
-                    - path: /
-                      pathType: Prefix
-
-                      backend:
-                        service:
-                          name: openemr
-
-                          port:
-                            number: 80
-
-    - name: Apply OpenEMR Ingress
-      command: kubectl apply -f /tmp/openemr-ingress.yaml
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
-
-    # -------------------------------------------------------------------------
     # Wait for Deployment
     # -------------------------------------------------------------------------
 
