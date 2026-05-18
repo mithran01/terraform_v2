@@ -308,7 +308,7 @@
 
             rules:
 
-              - host: openemr.example.com
+              - host:
 
                 http:
 
