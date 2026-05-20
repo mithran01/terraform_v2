@@ -22,3 +22,9 @@ CREATE DATABASE openemr;
 GRANT ALL PRIVILEGES ON openemr.* TO 'openemr'@'%';
 
 FLUSH PRIVILEGES;
+
+ kubectl logs $(kubectl get pods -n openemr | grep "openemr" | awk '{print $1}') -n openemr
+
+ kubectl exec -it $(kubectl get pods -n openemr | grep "openemr" | awk '{print $1}') -n openemr -- sh
+
+  kubectl exec -it $(kubectl get pods -n openemr | grep "mariadb" | awk '{print $1}') -n openemr -- sh
