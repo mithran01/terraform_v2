@@ -227,7 +227,16 @@
                           secretKeyRef:
                             name: openemr-secret
                             key: admin-password
-
+                    lifecycle:
+                      postStart:
+                        exec:
+                          command:
+                            - /bin/sh
+                            - -c
+                            - |
+                              sleep 15
+                              chmod 775 /var/www/localhost/htdocs/openemr/sites/default/documents || true
+                    
                     volumeMounts:
 
                       - name: openemr-documents
