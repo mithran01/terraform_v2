@@ -9,7 +9,7 @@ parameters:
   type: gp3
   fsType: ext4
   
-  tagSpecification_1: "Name=document"
+  tagSpecification_1: "Name=db-data"
   tagSpecification_2: "Environment=prod"
   tagSpecification_3: "Application=openemr"
 

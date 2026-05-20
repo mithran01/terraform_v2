@@ -143,7 +143,9 @@
 
                           echo "Copying initial OpenEMR documents..."
 
-                          cp -a /var/www/localhost/htdocs/openemr/sites/default/documents/. /mnt/documents/ || true
+                          cp -r /var/www/localhost/htdocs/openemr/sites/default/documents/. /mnt/documents/ || true
+                          
+                          chmod -R 775 /mnt/documents
 
                           touch /mnt/documents/.initialized
 

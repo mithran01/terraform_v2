@@ -2,7 +2,9 @@ ansible-playbook -i /etc/ansible/hosts mariadb-playbook.yaml
 
 ansible-playbook -i /etc/ansible/hosts redis-playbook.yaml
 
-ansible-playbook -i /etc/ansible/hosts 
+ansible-playbook -i /etc/ansible/hosts openemr-playbook.yaml
+
+
 kubectl delete deployment openemr -n openemr
 
 kubectl delete pvc openemr-documents -n openemr
