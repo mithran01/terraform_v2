@@ -13,7 +13,7 @@
 
     efs_storage_class: efs-sc
 
-    documents_storage_size: 5Gi
+    default_storage_size: 5Gi
 
     oe_admin_user: admin
 
@@ -56,18 +56,18 @@
         KUBECONFIG: "{{ kubeconfig_path }}"
 
     # -------------------------------------------------------------------------
-    # PVC for Documents
+    # PVC for Default folder
     # -------------------------------------------------------------------------
 
-    - name: Create OpenEMR Documents PVC
+    - name: Create OpenEMR Default PVC
       copy:
-        dest: /tmp/openemr-documents-pvc.yaml
+        dest: /tmp/openemr-default-pvc.yaml
         content: |
           apiVersion: v1
           kind: PersistentVolumeClaim
 
           metadata:
-            name: openemr-documents
+            name: openemr-default
             namespace: {{ namespace }}
 
             labels:
@@ -82,10 +82,10 @@
 
             resources:
               requests:
-                storage: {{ documents_storage_size }}
+                storage: {{ default_storage_size }}
 
-    - name: Apply OpenEMR Documents PVC
-      command: kubectl apply -f /tmp/openemr-documents-pvc.yaml
+    - name: Apply OpenEMR Default PVC
+      command: kubectl apply -f /tmp/openemr-default-pvc.yaml
       environment:
         KUBECONFIG: "{{ kubeconfig_path }}"
 
@@ -129,7 +129,7 @@
 
                 initContainers:
 
-                  - name: init-openemr-documents
+                  - name: init-openemr-default
 
                     image: {{ openemr_image }}
 
@@ -137,28 +137,26 @@
                       - /bin/sh
                       - -c
                       - |
-                        mkdir -p /mnt/documents
+                        mkdir -p /mnt/default
 
-                        if [ ! -f /mnt/documents/.initialized ]; then
+                        if [ ! -f /mnt/default/.initialized ]; then
 
-                          echo "Copying initial OpenEMR documents..."
+                          echo "Copying initial OpenEMR default..."
 
-                          cp -r /var/www/localhost/htdocs/openemr/sites/default/documents/. /mnt/documents/ || true
+                          cp -r /var/www/localhost/htdocs/openemr/sites/default/. /mnt/default/ || true
                           
-                          chmod -R 775 /mnt/documents
-
-                          touch /mnt/documents/.initialized
+                          touch /mnt/default/.initialized
 
                         else
 
-                          echo "Documents already initialized"
+                          echo "Default already initialized"
 
                         fi
 
                     volumeMounts:
 
-                      - name: openemr-documents
-                        mountPath: /mnt/documents
+                      - name: openemr-default
+                        mountPath: /mnt/default
 
                 # -------------------------------------------------------------
                 # Main Container
@@ -178,7 +176,7 @@
 
                     env:
                       # redis
-                      - name: REDIS_HOST
+                      - name: REDIS_SERVER
                         value: redis
 
                       # -------------------------------------------------------
@@ -234,13 +232,15 @@
                             - /bin/sh
                             - -c
                             - |
-                              sleep 15
-                              chmod 775 /var/www/localhost/htdocs/openemr/sites/default/documents || true
+                              sleep 5
+                              # Directory permissions
+                              find /var/www/localhost/htdocs/openemr/sites/default -type d -exec chmod 775 {} \;
+                              find /var/www/localhost/htdocs/openemr/sites/default -type f -name "*.php" -exec chmod 644 {} \;
                     
                     volumeMounts:
 
-                      - name: openemr-documents
-                        mountPath: /var/www/localhost/htdocs/openemr/sites/default/documents
+                      - name: openemr-default
+                        mountPath: /var/www/localhost/htdocs/openemr/sites/default
 
                     resources:
                       requests:
@@ -253,10 +253,10 @@
 
                 volumes:
 
-                  - name: openemr-documents
+                  - name: openemr-default
 
                     persistentVolumeClaim:
-                      claimName: openemr-documents
+                      claimName: openemr-default
 
     - name: Apply OpenEMR Deployment
       command: kubectl apply -f /tmp/openemr-deployment.yaml

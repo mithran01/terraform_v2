@@ -7,11 +7,11 @@ ansible-playbook -i /etc/ansible/hosts openemr-playbook.yaml
 
 kubectl delete deployment openemr -n openemr
 
-kubectl delete pvc openemr-documents -n openemr
+kubectl delete pvc openemr-default -n openemr
 
 kubectl get pv
 
-kubectl delete pv <old-pv>
+kubectl delete pv $(kubectl get pv | grep "efs-sc" | awk '{print $1}')
 
 kubectl delete storageclass efs-sc
 
